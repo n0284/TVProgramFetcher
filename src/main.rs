@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, NaiveDate, Utc};
 use dotenv::dotenv;
 use reqwest::Client;
 use serde::Deserialize;
@@ -17,6 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 一週間分の日付を生成
     let dates = get_dates_for_next_week();
     // 一日ずつリクエスト、番組検索
+    let mut all_matching = Vec::new();
     for date in dates {
         // リクエスト
         let url = format!(
@@ -30,58 +31,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let parsed: NHKResponse = serde_json::from_str(&body)?;
         // 特定のキーワードを含む番組を検索
         let config = load_config()?;
-        let keyword = config.keyword;
+        let keywords = config.keywords;
         let matching: Vec<_> = parsed
             .list
             .values()
             .flat_map(|list| list)
             .filter(|program| {
-                program.title.contains(&keyword) || program.content.contains(&keyword)
+                keywords.iter().any(|keyword| {
+                    program.title.contains(keyword) || program.content.contains(keyword)
+                })
             })
+            .cloned()
             .collect();
-        println!("結果*******{}{:?}*******",date,matching);
+        if !matching.is_empty() {
+            all_matching.extend(matching);
+        }
     }
 
-    // 一日分だけ
-    // let url = format!(
-    //     "https://api.nhk.or.jp/v2/pg/list/130/e1/2025-06-22.json?key={}",
-    //     nhk_api_key
-    // );
-    // let client = reqwest::Client::new();
-    // let res = client.get(url).send().await?;
-    // let body = res.text().await?;
-
-    // JSONデコード
-    // let parsed: NHKResponse = serde_json::from_str(&body)?;
-
-    // 特定のキーワードを含む番組を検索
-    // let config = load_config()?;
-    // let keyword = config.keyword;
-    // let matching: Vec<_> = parsed
-    //     .list
-    //     .values()
-    //     .flat_map(|list| list)
-    //     .filter(|program| program.title.contains(&keyword) || program.content.contains(&keyword))
-    //     .collect();
-
     // Slackに通知
-    // if !matching.is_empty() {
-    //     let message = format!(
-    //         "🔔 今日の番組に '{}' を含むものがあります:\n{}",
-    //         keyword,
-    //         matching
-    //             .iter()
-    //             .map(|p| format!("- {}", p.title))
-    //             .collect::<Vec<_>>()
-    //             .join("\n")
-    //     );
-    //     Client::new()
-    //         .post(&slack_webhook_url)
-    //         .json(&serde_json::json!({ "text": message }))
-    //         .send()
-    //         .await?;
-    // }
-
+    if !all_matching.is_empty() {
+        let message = all_matching
+            .iter()
+            .map(|program| {
+                // 日付パース
+                let parsed_time = DateTime::parse_from_rfc3339(&program.start_time);
+                // 整形 or fallback
+                match parsed_time {
+                    Ok(dt) => format!(
+                        "📅 {} 📺 {}",
+                        dt.format("%Y年%-m月%-d日 %H:%M～"),
+                        program.title
+                    ),
+                    Err(_) => format!("📅 {} 📺 {}", program.start_time, program.title), // パース失敗時はそのまま
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        Client::new()
+            .post(&slack_webhook_url)
+            .json(&serde_json::json!({ "text": message }))
+            .send()
+            .await?;
+    }
     Ok(())
 }
 
@@ -90,16 +81,16 @@ struct NHKResponse {
     list: std::collections::HashMap<String, Vec<Program>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Program {
-    id: String,
     title: String,
     content: String,
+    start_time: String,
 }
 
 #[derive(Deserialize)]
 struct Config {
-    keyword: String,
+    keywords: Vec<String>,
 }
 
 // configファイルの読み込み
