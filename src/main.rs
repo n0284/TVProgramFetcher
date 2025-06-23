@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, NaiveDate, Utc};
+use chrono::{DateTime, Duration, Utc};
 use dotenv::dotenv;
 use reqwest::Client;
 use serde::Deserialize;
