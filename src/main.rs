@@ -27,6 +27,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let client = reqwest::Client::new();
         let res = client.get(url).send().await?;
         let body = res.text().await?;
+        // 番組表が取得できなかった日はスキップ
+        if body.contains("error") {
+            println!("⚠️ {} の番組表が取得できないためスキップします。", date);
+            continue; // ← この日だけスキップして次の日へ
+        }
         // JSONデコード
         let parsed: NHKResponse = serde_json::from_str(&body)?;
         // 特定のキーワードを含む番組を検索
@@ -103,7 +108,7 @@ fn load_config() -> Result<Config, Box<dyn std::error::Error>> {
 // 一週間分の日付生成
 fn get_dates_for_next_week() -> Vec<String> {
     let today = Utc::now().date_naive();
-    (0..7)
+    (0..6)
         .map(|i| (today + Duration::days(i)).format("%Y-%m-%d").to_string())
         .collect()
 }
