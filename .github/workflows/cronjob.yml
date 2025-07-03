@@ -7,6 +7,7 @@ on:
 
 jobs:
   build-and-run:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
