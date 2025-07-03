@@ -4,6 +4,7 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::env;
 use std::fs;
+mod api;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -78,6 +79,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .send()
             .await?;
     }
+
+    //サーバー起動
+    api::run_api_server().await;
+
     Ok(())
 }
 
