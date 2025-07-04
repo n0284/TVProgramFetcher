@@ -1,6 +1,7 @@
 {
   "name": "Rust Sandbox on Dev Container",
   "image": "mcr.microsoft.com/devcontainers/rust:latest",
+  "forwardPorts": [8080],
   "customizations": {
     "vscode": {
       "extensions": [
